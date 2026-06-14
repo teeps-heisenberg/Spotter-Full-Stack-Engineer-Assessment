@@ -4,6 +4,7 @@ import { TripForm } from './components/TripForm'
 import { SummaryBar } from './components/SummaryBar'
 import { StopsList } from './components/StopsList'
 import { RouteMap } from './components/RouteMap'
+import { LogSheets } from './components/LogSheets'
 import { ApiError, planTrip } from './lib/api'
 import type { TripFormValues, TripResponse } from './types'
 
@@ -32,7 +33,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur">
+      <header className="no-print sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 lg:px-6">
           <span className="flex size-9 items-center justify-center rounded-lg bg-brand-800 text-white shadow-sm">
             <Truck className="size-5" />
@@ -46,7 +47,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-5 px-4 py-6 lg:grid-cols-[minmax(340px,380px)_1fr] lg:px-6">
+      <main className="no-print mx-auto grid max-w-7xl gap-5 px-4 py-6 lg:grid-cols-[minmax(340px,380px)_1fr] lg:px-6">
         <aside className="flex flex-col gap-5">
           <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
             <h2 className="mb-1 text-sm font-semibold text-ink">Plan a trip</h2>
@@ -66,6 +67,8 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {trip && trip.days.length > 0 && <LogSheets trip={trip} />}
     </div>
   )
 }

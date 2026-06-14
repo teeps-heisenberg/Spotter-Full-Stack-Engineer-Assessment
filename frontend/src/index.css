@@ -72,6 +72,26 @@ body {
   font-family: var(--font-sans);
 }
 
+@media print {
+  body {
+    background: #ffffff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .log-sheet {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
+    margin-bottom: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
