@@ -1,0 +1,24 @@
+# ---- Python / Django ----
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+.env
+backend/.env
+*.log
+
+# ---- Node / Vite ----
+node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Misc ----
+*.tmp
