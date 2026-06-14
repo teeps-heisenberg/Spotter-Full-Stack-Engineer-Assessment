@@ -19,6 +19,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 GEOCODE_URL = "https://api.geoapify.com/v1/geocode/search"
+REVERSE_URL = "https://api.geoapify.com/v1/geocode/reverse"
 ROUTING_URL = "https://api.geoapify.com/v1/routing"
 
 METERS_PER_MILE = 1609.344
@@ -101,6 +102,40 @@ def geocode(text: str) -> dict:
     }
     cache.set(cache_key, result, CACHE_TTL)
     return result
+
+
+def reverse_geocode(lat: float, lon: float) -> str:
+    """Resolve coordinates to a short ``"City, ST"`` label for log remarks.
+
+    Best-effort: on any failure it falls back to rounded coordinates so the
+    planner output is never blocked by a labelling hiccup. Cached by rounded
+    coordinates to keep us within the free-tier call budget.
+    """
+    fallback = f"{lat:.3f}, {lon:.3f}"
+    cache_key = _cache_key("reverse", f"{lat:.3f},{lon:.3f}")
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        response = requests.get(
+            REVERSE_URL,
+            params={"lat": lat, "lon": lon, "apiKey": _api_key()},
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        features = response.json().get("features") or []
+        if not features:
+            return fallback
+        props = features[0]["properties"]
+        city = props.get("city") or props.get("county") or props.get("state")
+        state = props.get("state_code") or props.get("state")
+        label = ", ".join(part for part in (city, state) if part) or fallback
+    except (requests.RequestException, GeoapifyError):
+        return fallback
+
+    cache.set(cache_key, label, CACHE_TTL)
+    return label
 
 
 def route(coordinates: list[tuple[float, float]]) -> dict:

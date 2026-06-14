@@ -8,8 +8,14 @@ cycle hours used) and produces:
   day, as many as the trip needs — obeying federal Hours-of-Service rules for a
   property-carrying driver (70 hr / 8 day).
 
-> Status: **project scaffold** (Part 0). Route service, HOS planner, map, and log
-> rendering are built in later parts.
+> Status: **backend complete** (Parts 1–3). Frontend map + ELD log rendering next.
+>
+> API endpoints:
+> - `GET  /api/health/` — liveness check
+> - `POST /api/route/`  — geocode + driving route only
+> - `POST /api/trip/`   — full plan: route + HOS schedule + per-day log sheets
+>   (body: `current_location`, `pickup_location`, `dropoff_location`,
+>   `current_cycle_used`)
 
 ## Tech stack
 

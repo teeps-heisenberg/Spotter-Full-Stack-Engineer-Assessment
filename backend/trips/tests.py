@@ -176,3 +176,54 @@ class RouteEndpointTests(TestCase):
         self.assertIn("locations", body)
         self.assertEqual(mock_geocode.call_count, 3)
         self.assertEqual(mock_route.call_count, 1)
+
+
+class TripEndpointTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    VALID_INPUT = {
+        "current_location": "Chicago, IL",
+        "pickup_location": "Springfield, IL",
+        "dropoff_location": "St. Louis, MO",
+        "current_cycle_used": 10,
+    }
+
+    @patch("trips.views.geoapify.reverse_geocode")
+    @patch("trips.views.geoapify.route")
+    @patch("trips.views.geoapify.geocode")
+    def test_trip_returns_days_stops_summary(self, mock_geocode, mock_route, mock_reverse):
+        mock_geocode.return_value = {
+            "lat": 40.0, "lon": -89.0, "formatted": "X", "city": "X", "state_code": "IL",
+        }
+        mock_route.return_value = {
+            "geometry": [[-87.6, 41.9], [-89.6, 39.8], [-90.2, 38.6]],
+            "distance_m": 482575.0, "distance_mi": 300.0,
+            "time_s": 18000.0, "time_hr": 5.0,
+            "legs": [
+                {"distance_m": 1, "distance_mi": 200.0, "time_s": 1, "time_hr": 3.3},
+                {"distance_m": 1, "distance_mi": 100.0, "time_s": 1, "time_hr": 1.7},
+            ],
+        }
+        mock_reverse.return_value = "Somewhere, IL"
+
+        response = self.client.post(
+            "/api/trip/", self.VALID_INPUT, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("days", body)
+        self.assertIn("stops", body)
+        self.assertIn("summary", body)
+        # Every day must cover a full 24 hours.
+        for day in body["days"]:
+            self.assertAlmostEqual(sum(day["totals"].values()), 24.0, places=1)
+        self.assertEqual(body["stops"][0]["kind"], "start")
+
+    @patch("trips.views.geoapify.geocode")
+    def test_trip_geocode_failure_returns_404(self, mock_geocode):
+        mock_geocode.side_effect = geoapify.GeocodingError("not found")
+        response = self.client.post(
+            "/api/trip/", self.VALID_INPUT, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 404)
