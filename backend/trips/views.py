@@ -26,31 +26,55 @@ def diag(request):
         # the WSGI request-body read, not Geoapify.
         return Response({"method": "POST", "received": request.data})
 
-    out = {"key_set": bool(settings.GEOAPIFY_API_KEY)}
+    import os
 
-    # 1) DNS resolution (the part requests' timeout does NOT cover).
-    t0 = time.time()
-    try:
-        ip = socket.gethostbyname("api.geoapify.com")
-        out["dns"] = {"ok": True, "ip": ip, "elapsed_s": round(time.time() - t0, 2)}
-    except Exception as exc:
-        out["dns"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}",
-                      "elapsed_s": round(time.time() - t0, 2)}
+    out = {
+        "key_set": bool(settings.GEOAPIFY_API_KEY),
+        "on_vercel": bool(os.getenv("VERCEL")),
+        "cache_backend": settings.CACHES["default"]["BACKEND"].rsplit(".", 1)[-1],
+    }
 
-    # 2) A single geocode HTTP call.
-    t1 = time.time()
-    try:
-        r = requests.get(
-            "https://api.geoapify.com/v1/geocode/search",
-            params={"text": "Chicago, IL", "filter": "countrycode:us", "limit": 1,
-                    "apiKey": settings.GEOAPIFY_API_KEY},
-            timeout=10,
+    def phase(name, fn):
+        t = time.time()
+        try:
+            val = fn()
+            out[name] = {"ok": True, "s": round(time.time() - t, 2), "info": val}
+            return True
+        except Exception as exc:
+            out[name] = {"error": f"{type(exc).__name__}: {exc}", "s": round(time.time() - t, 2)}
+            return False
+
+    state = {}
+
+    def do_geocode():
+        state["cur"] = geoapify.geocode("Chicago, IL")
+        state["pick"] = geoapify.geocode("Des Moines, IA")
+        state["drop"] = geoapify.geocode("Denver, CO")
+        return "3 geocoded (cached path)"
+
+    def do_route():
+        state["route"] = geoapify.route([
+            (state["cur"]["lat"], state["cur"]["lon"]),
+            (state["pick"]["lat"], state["pick"]["lon"]),
+            (state["drop"]["lat"], state["drop"]["lon"]),
+        ])
+        return f"{len(state['route']['geometry'])} geometry points"
+
+    def do_plan():
+        state["segs"] = planner.plan_trip(
+            legs=state["route"]["legs"], geometry=state["route"]["geometry"],
+            current_cycle_used=14,
         )
-        out["geocode"] = {"status": r.status_code, "elapsed_s": round(time.time() - t1, 2),
-                          "has_features": bool(r.json().get("features"))}
-    except Exception as exc:
-        out["geocode"] = {"error": f"{type(exc).__name__}: {exc}",
-                          "elapsed_s": round(time.time() - t1, 2)}
+        return f"{len(state['segs'])} segments"
+
+    def do_build():
+        td = logsheet.build_trip(state["segs"], resolve_labels=geoapify.reverse_geocode_many)
+        return f"{len(td['days'])} days"
+
+    (phase("geocode", do_geocode)
+        and phase("route", do_route)
+        and phase("plan", do_plan)
+        and phase("build_reverse", do_build))
 
     return Response(out)
 
