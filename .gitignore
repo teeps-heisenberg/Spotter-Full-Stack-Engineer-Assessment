@@ -6,7 +6,6 @@ __pycache__/
 db.sqlite3
 backend/staticfiles/
 backend/.django_cache/
-.env
 backend/.env
 *.log
 
@@ -27,3 +26,4 @@ Thumbs.db
 
 # ---- Misc ----
 *.tmp
+config.bat

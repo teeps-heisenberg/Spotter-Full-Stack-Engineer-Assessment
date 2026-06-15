@@ -1,8 +1,3 @@
-import socket
-import time
-
-import requests
-from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -15,80 +10,6 @@ from .services import geoapify, logsheet, planner
 def health(request):
     """Simple liveness check used to confirm the API is up."""
     return Response({"status": "ok", "service": "spotter-eld-backend"})
-
-
-@api_view(["GET", "POST"])
-def diag(request):
-    """Diagnostic: isolate POST body parsing + outbound connectivity (timed)."""
-    if request.method == "POST":
-        # Pure body-echo: tests whether reading/parsing the POST body works on
-        # this runtime, with NO external calls. If this hangs, the problem is
-        # the WSGI request-body read, not Geoapify.
-        return Response({"method": "POST", "received": request.data})
-
-    import os
-
-    out = {
-        "key_set": bool(settings.GEOAPIFY_API_KEY),
-        "on_vercel": bool(os.getenv("VERCEL")),
-        "cache_backend": settings.CACHES["default"]["BACKEND"].rsplit(".", 1)[-1],
-    }
-
-    def phase(name, fn):
-        t = time.time()
-        try:
-            val = fn()
-            out[name] = {"ok": True, "s": round(time.time() - t, 2), "info": val}
-            return True
-        except Exception as exc:
-            out[name] = {"error": f"{type(exc).__name__}: {exc}", "s": round(time.time() - t, 2)}
-            return False
-
-    state = {}
-
-    def do_geocode():
-        state["cur"] = geoapify.geocode("Chicago, IL")
-        state["pick"] = geoapify.geocode("Des Moines, IA")
-        state["drop"] = geoapify.geocode("Denver, CO")
-        return "3 geocoded (cached path)"
-
-    def do_route():
-        state["route"] = geoapify.route([
-            (state["cur"]["lat"], state["cur"]["lon"]),
-            (state["pick"]["lat"], state["pick"]["lon"]),
-            (state["drop"]["lat"], state["drop"]["lon"]),
-        ])
-        return f"{len(state['route']['geometry'])} geometry points"
-
-    def do_plan():
-        state["segs"] = planner.plan_trip(
-            legs=state["route"]["legs"], geometry=state["route"]["geometry"],
-            current_cycle_used=14,
-        )
-        return f"{len(state['segs'])} segments"
-
-    def do_build():
-        td = logsheet.build_trip(state["segs"], resolve_labels=geoapify.reverse_geocode_many)
-        return f"{len(td['days'])} days"
-
-    # ?stop=geocode|route|plan|build lets us run the pipeline only up to a
-    # given phase, so we can locate a hang by binary search via GET.
-    stop = request.GET.get("stop", "build")
-    limit = {"geocode": 1, "route": 2, "plan": 3, "build": 4}.get(stop, 4)
-    steps = [
-        ("geocode", do_geocode),
-        ("route", do_route),
-        ("plan", do_plan),
-        ("build_reverse", do_build),
-    ]
-    out["stop"] = stop
-    for i, (name, fn) in enumerate(steps):
-        if i >= limit:
-            break
-        if not phase(name, fn):
-            break
-
-    return Response(out)
 
 
 def _geocode_and_route(data):
@@ -154,16 +75,13 @@ def trip(request):
     Pipeline: geocode -> route -> HOS planner -> per-day log sheets, with stop
     locations reverse-geocoded (cached) for the log remarks and map markers.
     """
-    print("[trip] start", flush=True)
     serializer = TripInputSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
-    print("[trip] body parsed", flush=True)
 
     locations, route_result, error = _geocode_and_route(data)
     if error is not None:
         return error
-    print("[trip] geocoded + routed", flush=True)
 
     try:
         segments = planner.plan_trip(
@@ -171,11 +89,9 @@ def trip(request):
             geometry=route_result["geometry"],
             current_cycle_used=data["current_cycle_used"],
         )
-        print("[trip] planned", flush=True)
         trip_data = logsheet.build_trip(
             segments, resolve_labels=geoapify.reverse_geocode_many
         )
-        print("[trip] built (reverse-geocoded)", flush=True)
     except Exception as exc:  # pragma: no cover - defensive guard
         return Response(
             {"error": f"Failed to build the trip plan: {exc}"},
