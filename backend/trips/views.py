@@ -1,3 +1,8 @@
+import socket
+import time
+
+import requests
+from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -10,6 +15,38 @@ from .services import geoapify, logsheet, planner
 def health(request):
     """Simple liveness check used to confirm the API is up."""
     return Response({"status": "ok", "service": "spotter-eld-backend"})
+
+
+@api_view(["GET"])
+def diag(request):
+    """Diagnostic: isolate outbound connectivity to Geoapify (timed)."""
+    out = {"key_set": bool(settings.GEOAPIFY_API_KEY)}
+
+    # 1) DNS resolution (the part requests' timeout does NOT cover).
+    t0 = time.time()
+    try:
+        ip = socket.gethostbyname("api.geoapify.com")
+        out["dns"] = {"ok": True, "ip": ip, "elapsed_s": round(time.time() - t0, 2)}
+    except Exception as exc:
+        out["dns"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}",
+                      "elapsed_s": round(time.time() - t0, 2)}
+
+    # 2) A single geocode HTTP call.
+    t1 = time.time()
+    try:
+        r = requests.get(
+            "https://api.geoapify.com/v1/geocode/search",
+            params={"text": "Chicago, IL", "filter": "countrycode:us", "limit": 1,
+                    "apiKey": settings.GEOAPIFY_API_KEY},
+            timeout=10,
+        )
+        out["geocode"] = {"status": r.status_code, "elapsed_s": round(time.time() - t1, 2),
+                          "has_features": bool(r.json().get("features"))}
+    except Exception as exc:
+        out["geocode"] = {"error": f"{type(exc).__name__}: {exc}",
+                          "elapsed_s": round(time.time() - t1, 2)}
+
+    return Response(out)
 
 
 def _geocode_and_route(data):
