@@ -1,4 +1,3 @@
-import math
 from concurrent.futures import ThreadPoolExecutor
 
 from rest_framework import status
@@ -7,21 +6,6 @@ from rest_framework.response import Response
 
 from .serializers import TripInputSerializer
 from .services import geoapify, logsheet, planner
-
-# Cap the route polyline we send to the browser. A cross-country route can be
-# ~9,500 points; ~1,500 looks identical on the map but is far lighter.
-MAX_GEOMETRY_POINTS = 1500
-
-
-def _downsample(geometry: list, max_points: int = MAX_GEOMETRY_POINTS) -> list:
-    n = len(geometry)
-    if n <= max_points:
-        return geometry
-    stride = math.ceil(n / max_points)
-    sampled = geometry[::stride]
-    if sampled[-1] != geometry[-1]:
-        sampled.append(geometry[-1])
-    return sampled
 
 
 @api_view(["GET"])
@@ -126,7 +110,7 @@ def trip(request):
             "input": dict(data),
             "locations": locations,
             "route": {
-                "geometry": _downsample(route_result["geometry"]),
+                "geometry": route_result["geometry"],
                 "distance_mi": round(route_result["distance_mi"], 1),
                 "time_hr": round(route_result["time_hr"], 2),
                 "legs": route_result["legs"],

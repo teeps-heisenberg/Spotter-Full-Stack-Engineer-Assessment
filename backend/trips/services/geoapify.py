@@ -24,6 +24,10 @@ REVERSE_URL = "https://api.geoapify.com/v1/geocode/reverse"
 ROUTING_URL = "https://api.geoapify.com/v1/routing"
 
 METERS_PER_MILE = 1609.344
+# Cap the route polyline. A cross-country route can be ~9,500 points; ~1,500 is
+# visually identical on the map and far lighter for memory + payload. Applied
+# before caching/planning so nothing downstream holds the full geometry.
+MAX_GEOMETRY_POINTS = 1500
 REQUEST_TIMEOUT = 12  # seconds (geocode/route)
 # Reverse-geocode runs once per stop; keep it short so a slow one degrades to a
 # coordinate fallback rather than blowing the whole request's time budget.
@@ -57,6 +61,17 @@ def _cache_key(namespace: str, value: str) -> str:
     """Build a backend-safe cache key (no spaces/colons in the variable part)."""
     digest = hashlib.md5(value.encode("utf-8")).hexdigest()
     return f"geoapify:{namespace}:{digest}"
+
+
+def _downsample(points: list, max_points: int = MAX_GEOMETRY_POINTS) -> list:
+    n = len(points)
+    if n <= max_points:
+        return points
+    stride = -(-n // max_points)  # ceil division
+    sampled = points[::stride]
+    if sampled[-1] != points[-1]:
+        sampled.append(points[-1])
+    return sampled
 
 
 def geocode(text: str) -> dict:
@@ -221,11 +236,12 @@ def route(coordinates: list[tuple[float, float]]) -> dict:
     props = feature["properties"]
     geometry = feature["geometry"]
 
-    # Flatten MultiLineString -> single list of [lon, lat] points.
+    # Flatten MultiLineString -> single list of [lon, lat] points, then cap size.
     if geometry["type"] == "MultiLineString":
         flat = [point for line in geometry["coordinates"] for point in line]
     else:  # LineString fallback
         flat = list(geometry["coordinates"])
+    flat = _downsample(flat)
 
     distance_m = float(props["distance"])
     time_s = float(props["time"])
