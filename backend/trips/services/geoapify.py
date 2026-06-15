@@ -13,7 +13,6 @@ durations in BOTH seconds (raw) and hours (derived).
 from __future__ import annotations
 
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from django.conf import settings
@@ -165,12 +164,13 @@ def reverse_geocode(lat: float, lon: float) -> str:
 
 
 def reverse_geocode_many(coords: list[tuple[float, float]]) -> dict[tuple[float, float], str]:
-    """Reverse-geocode many points concurrently.
+    """Reverse-geocode several points, deduplicated.
 
     Returns a dict keyed by ``(round(lat, 3), round(lon, 3))`` so callers can
-    look up labels with the same rounding. Deduplicates first, then fans the
-    requests out across threads (I/O-bound) — far faster than sequential calls
-    on a cold cache.
+    look up labels with the same rounding. Runs sequentially — each call is
+    cached and individually time-bounded, and the set is small (only the
+    displayed stops, ~6), so this stays well within the request budget while
+    avoiding concurrent-HTTPS deadlocks in serverless runtimes.
     """
     unique: dict[tuple[float, float], tuple[float, float]] = {}
     for lat, lon in coords:
@@ -178,19 +178,7 @@ def reverse_geocode_many(coords: list[tuple[float, float]]) -> dict[tuple[float,
             continue
         unique[(round(lat, 3), round(lon, 3))] = (lat, lon)
 
-    if not unique:
-        return {}
-
-    results: dict[tuple[float, float], str] = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(unique))) as executor:
-        futures = {
-            executor.submit(reverse_geocode, lat, lon): key
-            for key, (lat, lon) in unique.items()
-        }
-        for future, key in futures.items():
-            # reverse_geocode never raises (returns a coordinate fallback).
-            results[key] = future.result()
-    return results
+    return {key: reverse_geocode(lat, lon) for key, (lat, lon) in unique.items()}
 
 
 def route(coordinates: list[tuple[float, float]]) -> dict:

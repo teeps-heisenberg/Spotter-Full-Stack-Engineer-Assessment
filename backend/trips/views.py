@@ -1,5 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
-
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -20,25 +18,20 @@ def _geocode_and_route(data):
     Returns ``(locations, route_result, error_response)``. If ``error_response``
     is not None the caller should return it directly.
     """
-    fields = ("current_location", "pickup_location", "dropoff_location")
-    # Geocode the three locations concurrently (I/O-bound).
     locations = {}
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(geoapify.geocode, data[f]): f for f in fields}
-        for future in futures:
-            field = futures[future]
-            try:
-                locations[field] = future.result()
-            except geoapify.GeocodingError as exc:
-                return None, None, Response(
-                    {"error": str(exc), "field": field}, status=status.HTTP_404_NOT_FOUND
-                )
-            except geoapify.GeoapifyError as exc:
-                # Config/upstream issue (e.g. missing API key) — return a clean
-                # error (with CORS headers) instead of an unhandled 500.
-                return None, None, Response(
-                    {"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY
-                )
+    for field in ("current_location", "pickup_location", "dropoff_location"):
+        try:
+            locations[field] = geoapify.geocode(data[field])
+        except geoapify.GeocodingError as exc:
+            return None, None, Response(
+                {"error": str(exc), "field": field}, status=status.HTTP_404_NOT_FOUND
+            )
+        except geoapify.GeoapifyError as exc:
+            # Config/upstream issue (e.g. missing API key) — return a clean
+            # error (with CORS headers) instead of an unhandled 500.
+            return None, None, Response(
+                {"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY
+            )
 
     waypoints = [
         (locations["current_location"]["lat"], locations["current_location"]["lon"]),
