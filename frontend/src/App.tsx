@@ -69,6 +69,14 @@ export default function App() {
       </main>
 
       {trip && trip.days.length > 0 && <LogSheets trip={trip} />}
+
+      <footer className="no-print mx-auto max-w-7xl px-4 py-6 lg:px-6">
+        <p className="border-t border-line pt-4 text-xs text-muted">
+          Routing &amp; geocoding by Geoapify · Map tiles &copy; OpenStreetMap contributors.
+          Log sheets are computed estimates based on federal property-carrier
+          Hours-of-Service rules (70 hr / 8 day) and are for demonstration purposes.
+        </p>
+      </footer>
     </div>
   )
 }

@@ -1,0 +1,25 @@
+# Render blueprint for the Django backend.
+# Either let Render read this file (New + Blueprint), or replicate the build/
+# start commands manually in a Web Service. See README "Deployment".
+services:
+  - type: web
+    name: spotter-eld-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.2"
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      # Set this in the Render dashboard (do not commit your key):
+      - key: GEOAPIFY_API_KEY
+        sync: false
+      # Optional: lock CORS to your exact Vercel URL (the *.vercel.app regex is
+      # allowed by default, so this is only needed for a custom domain).
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

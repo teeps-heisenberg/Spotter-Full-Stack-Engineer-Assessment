@@ -43,6 +43,9 @@ RESTART_DURATION = 34.0
 
 # --- Trip constants (from the brief / locked decisions) ---
 FUEL_INTERVAL_MI = 1000.0
+# Don't insert a fuel stop within this many miles of the destination — a driver
+# wouldn't fuel right before arriving, and the leg is still under 1000 mi.
+FUEL_MIN_TAIL_MI = 30.0
 FUEL_DURATION = 0.5
 PICKUP_DURATION = 1.0
 DROPOFF_DURATION = 1.0
@@ -228,8 +231,9 @@ def plan_trip(
             state.drove_since_break += chunk_hr
             remaining -= chunk_miles
 
-            # Refuel if we've hit the interval and there's still road ahead.
-            if remaining > EPS and state.miles_since_fuel >= FUEL_INTERVAL_MI - EPS:
+            # Refuel if we've hit the interval and there's still meaningful road
+            # ahead (no point fueling a few miles from the destination).
+            if remaining > FUEL_MIN_TAIL_MI and state.miles_since_fuel >= FUEL_INTERVAL_MI - EPS:
                 insert_fuel()
 
     def leg_speed(leg: dict) -> float:

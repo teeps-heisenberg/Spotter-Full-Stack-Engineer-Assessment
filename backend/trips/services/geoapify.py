@@ -128,9 +128,16 @@ def reverse_geocode(lat: float, lon: float) -> str:
         if not features:
             return fallback
         props = features[0]["properties"]
-        city = props.get("city") or props.get("county") or props.get("state")
+        # Most specific sensible place name; skip empty / single-char junk.
+        place = None
+        for key in ("city", "town", "village", "municipality", "suburb", "county"):
+            value = props.get(key)
+            if value and len(value.strip()) > 2:
+                place = value.strip()
+                break
+        place = place or props.get("state")
         state = props.get("state_code") or props.get("state")
-        label = ", ".join(part for part in (city, state) if part) or fallback
+        label = ", ".join(part for part in (place, state) if part) or fallback
     except (requests.RequestException, GeoapifyError):
         return fallback
 
