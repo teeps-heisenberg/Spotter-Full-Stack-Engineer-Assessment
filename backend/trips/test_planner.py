@@ -121,6 +121,19 @@ class PlannerBasicTests(SimpleTestCase):
         self.assertEqual(restarts[0].status, OFF_DUTY)
         self.assertAlmostEqual(restarts[0].duration_hr, 34.0)
 
+    def test_trip_ending_near_fuel_interval_terminates(self):
+        # Regression: a trip that reaches a 1000-mi fuel interval with only a few
+        # miles left (e.g. 1005 mi total) must still terminate — the skipped
+        # tail fuel stop previously clamped the drive chunk to zero forever.
+        for total in (999, 1000, 1005, 1030, 2005, 3010):
+            segs = planner.plan_trip(
+                legs=make_legs(total * 0.5, total * 0.5 / 55, total * 0.5, total * 0.5 / 55),
+                geometry=GEOMETRY,
+                current_cycle_used=0,
+                start_dt=START,
+            )
+            self.assertEqual(segs[-1].kind, "dropoff", f"{total} mi did not finish")
+
     def test_segments_are_contiguous(self):
         segs = planner.plan_trip(
             legs=make_legs(900, 16.0), geometry=GEOMETRY, current_cycle_used=20, start_dt=START

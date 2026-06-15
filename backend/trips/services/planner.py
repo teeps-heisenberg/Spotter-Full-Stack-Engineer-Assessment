@@ -218,10 +218,19 @@ def plan_trip(
             if avail_break <= EPS:
                 insert_break()
                 continue
+            # Fuel when the interval is hit and there's meaningful road ahead.
+            # Near the destination we skip it (a driver wouldn't fuel in the last
+            # few miles) — and crucially we must NOT let the fuel limit clamp the
+            # chunk to zero in that tail, or the loop would never finish.
+            fuelling = remaining > FUEL_MIN_TAIL_MI
+            if fuelling and state.miles_since_fuel >= FUEL_INTERVAL_MI - EPS:
+                insert_fuel()
+                continue
 
             drivable_hr = min(avail_window, avail_11, avail_break, avail_cycle)
-            miles_to_fuel = FUEL_INTERVAL_MI - state.miles_since_fuel
-            chunk_miles = min(remaining, miles_to_fuel, drivable_hr * speed)
+            chunk_miles = min(remaining, drivable_hr * speed)
+            if fuelling:
+                chunk_miles = min(chunk_miles, FUEL_INTERVAL_MI - state.miles_since_fuel)
             chunk_hr = chunk_miles / speed
 
             add(DRIVING, chunk_hr, "drive", "Driving")
@@ -230,11 +239,6 @@ def plan_trip(
             state.drove_window += chunk_hr
             state.drove_since_break += chunk_hr
             remaining -= chunk_miles
-
-            # Refuel if we've hit the interval and there's still meaningful road
-            # ahead (no point fueling a few miles from the destination).
-            if remaining > FUEL_MIN_TAIL_MI and state.miles_since_fuel >= FUEL_INTERVAL_MI - EPS:
-                insert_fuel()
 
     def leg_speed(leg: dict) -> float:
         return leg["distance_mi"] / leg["time_hr"] if leg.get("time_hr", 0) > 0 else DEFAULT_SPEED
