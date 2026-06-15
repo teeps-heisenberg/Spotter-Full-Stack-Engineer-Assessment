@@ -71,10 +71,22 @@ def diag(request):
         td = logsheet.build_trip(state["segs"], resolve_labels=geoapify.reverse_geocode_many)
         return f"{len(td['days'])} days"
 
-    (phase("geocode", do_geocode)
-        and phase("route", do_route)
-        and phase("plan", do_plan)
-        and phase("build_reverse", do_build))
+    # ?stop=geocode|route|plan|build lets us run the pipeline only up to a
+    # given phase, so we can locate a hang by binary search via GET.
+    stop = request.GET.get("stop", "build")
+    limit = {"geocode": 1, "route": 2, "plan": 3, "build": 4}.get(stop, 4)
+    steps = [
+        ("geocode", do_geocode),
+        ("route", do_route),
+        ("plan", do_plan),
+        ("build_reverse", do_build),
+    ]
+    out["stop"] = stop
+    for i, (name, fn) in enumerate(steps):
+        if i >= limit:
+            break
+        if not phase(name, fn):
+            break
 
     return Response(out)
 
