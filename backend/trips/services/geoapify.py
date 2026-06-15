@@ -23,7 +23,10 @@ REVERSE_URL = "https://api.geoapify.com/v1/geocode/reverse"
 ROUTING_URL = "https://api.geoapify.com/v1/routing"
 
 METERS_PER_MILE = 1609.344
-REQUEST_TIMEOUT = 30  # seconds
+REQUEST_TIMEOUT = 12  # seconds (geocode/route)
+# Reverse-geocode runs once per stop; keep it short so a slow one degrades to a
+# coordinate fallback rather than blowing the whole request's time budget.
+REVERSE_TIMEOUT = 6
 
 # Cache results for a day. Geocodes/routes for the same input never change in a
 # session, so this keeps us well under the free-tier rate limit.
@@ -121,7 +124,7 @@ def reverse_geocode(lat: float, lon: float) -> str:
         response = requests.get(
             REVERSE_URL,
             params={"lat": lat, "lon": lon, "apiKey": _api_key()},
-            timeout=REQUEST_TIMEOUT,
+            timeout=REVERSE_TIMEOUT,
         )
         response.raise_for_status()
         features = response.json().get("features") or []
