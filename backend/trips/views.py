@@ -26,6 +26,12 @@ def _geocode_and_route(data):
             return None, None, Response(
                 {"error": str(exc), "field": field}, status=status.HTTP_404_NOT_FOUND
             )
+        except geoapify.GeoapifyError as exc:
+            # Config/upstream issue (e.g. missing API key) — return a clean
+            # error (with CORS headers) instead of an unhandled 500.
+            return None, None, Response(
+                {"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY
+            )
 
     waypoints = [
         (locations["current_location"]["lat"], locations["current_location"]["lon"]),
@@ -77,12 +83,18 @@ def trip(request):
     if error is not None:
         return error
 
-    segments = planner.plan_trip(
-        legs=route_result["legs"],
-        geometry=route_result["geometry"],
-        current_cycle_used=data["current_cycle_used"],
-    )
-    trip_data = logsheet.build_trip(segments, resolve_label=geoapify.reverse_geocode)
+    try:
+        segments = planner.plan_trip(
+            legs=route_result["legs"],
+            geometry=route_result["geometry"],
+            current_cycle_used=data["current_cycle_used"],
+        )
+        trip_data = logsheet.build_trip(segments, resolve_label=geoapify.reverse_geocode)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return Response(
+            {"error": f"Failed to build the trip plan: {exc}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     return Response(
         {
