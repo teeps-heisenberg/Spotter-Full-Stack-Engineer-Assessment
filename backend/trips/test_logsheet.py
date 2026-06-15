@@ -8,8 +8,8 @@ START = datetime(2025, 1, 6, 8, 0)
 GEOMETRY = [[-87.6, 41.9], [-92.0, 40.0], [-96.0, 39.0]]
 
 
-def _stub_label(lat, lon):
-    return "Testville, IL"
+def _stub_labels(coords):
+    return {(round(lat, 3), round(lon, 3)): "Testville, IL" for lat, lon in coords}
 
 
 def _build(miles_leg0, hr_leg0, miles_leg1, hr_leg1, cycle=0):
@@ -22,7 +22,7 @@ def _build(miles_leg0, hr_leg0, miles_leg1, hr_leg1, cycle=0):
         current_cycle_used=cycle,
         start_dt=START,
     )
-    return logsheet.build_trip(segs, resolve_label=_stub_label)
+    return logsheet.build_trip(segs, resolve_labels=_stub_labels)
 
 
 class DaySplitterTests(SimpleTestCase):

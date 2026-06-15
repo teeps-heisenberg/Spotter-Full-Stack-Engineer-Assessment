@@ -189,7 +189,7 @@ class TripEndpointTests(TestCase):
         "current_cycle_used": 10,
     }
 
-    @patch("trips.views.geoapify.reverse_geocode")
+    @patch("trips.views.geoapify.reverse_geocode_many")
     @patch("trips.views.geoapify.route")
     @patch("trips.views.geoapify.geocode")
     def test_trip_returns_days_stops_summary(self, mock_geocode, mock_route, mock_reverse):
@@ -205,7 +205,7 @@ class TripEndpointTests(TestCase):
                 {"distance_m": 1, "distance_mi": 100.0, "time_s": 1, "time_hr": 1.7},
             ],
         }
-        mock_reverse.return_value = "Somewhere, IL"
+        mock_reverse.return_value = {}
 
         response = self.client.post(
             "/api/trip/", self.VALID_INPUT, content_type="application/json"

@@ -87,20 +87,22 @@ def _pad_piece(status: str, start: datetime, end: datetime) -> dict:
 
 def build_trip(
     segments: list[Segment],
-    resolve_label: Callable[[float, float], str] | None = None,
+    resolve_labels: Callable[[list[tuple[float, float]]], dict] | None = None,
 ) -> dict:
     if not segments:
         return {"days": [], "stops": [], "summary": {}}
 
-    label_cache: dict[tuple, str | None] = {}
+    # Only the displayed points get labels: the trip start + non-driving events
+    # (these are the stops and the remark annotations). Driving segments don't
+    # need a label, so we never reverse-geocode them — far fewer API calls.
+    needed = [(segments[0].lat, segments[0].lon)]
+    needed += [(s.lat, s.lon) for s in segments if s.kind in EVENT_KINDS]
+    label_map = resolve_labels(needed) if resolve_labels else {}
 
     def label_for(lat: float | None, lon: float | None) -> str | None:
-        if resolve_label is None or lat is None or lon is None:
+        if lat is None or lon is None:
             return None
-        key = (round(lat, 3), round(lon, 3))
-        if key not in label_cache:
-            label_cache[key] = resolve_label(lat, lon)
-        return label_cache[key]
+        return label_map.get((round(lat, 3), round(lon, 3)))
 
     miles = _segment_miles(segments)
     trip_start = segments[0].start
