@@ -17,9 +17,15 @@ def health(request):
     return Response({"status": "ok", "service": "spotter-eld-backend"})
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 def diag(request):
-    """Diagnostic: isolate outbound connectivity to Geoapify (timed)."""
+    """Diagnostic: isolate POST body parsing + outbound connectivity (timed)."""
+    if request.method == "POST":
+        # Pure body-echo: tests whether reading/parsing the POST body works on
+        # this runtime, with NO external calls. If this hangs, the problem is
+        # the WSGI request-body read, not Geoapify.
+        return Response({"method": "POST", "received": request.data})
+
     out = {"key_set": bool(settings.GEOAPIFY_API_KEY)}
 
     # 1) DNS resolution (the part requests' timeout does NOT cover).
@@ -112,13 +118,16 @@ def trip(request):
     Pipeline: geocode -> route -> HOS planner -> per-day log sheets, with stop
     locations reverse-geocoded (cached) for the log remarks and map markers.
     """
+    print("[trip] start", flush=True)
     serializer = TripInputSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
+    print("[trip] body parsed", flush=True)
 
     locations, route_result, error = _geocode_and_route(data)
     if error is not None:
         return error
+    print("[trip] geocoded + routed", flush=True)
 
     try:
         segments = planner.plan_trip(
@@ -126,9 +135,11 @@ def trip(request):
             geometry=route_result["geometry"],
             current_cycle_used=data["current_cycle_used"],
         )
+        print("[trip] planned", flush=True)
         trip_data = logsheet.build_trip(
             segments, resolve_labels=geoapify.reverse_geocode_many
         )
+        print("[trip] built (reverse-geocoded)", flush=True)
     except Exception as exc:  # pragma: no cover - defensive guard
         return Response(
             {"error": f"Failed to build the trip plan: {exc}"},
