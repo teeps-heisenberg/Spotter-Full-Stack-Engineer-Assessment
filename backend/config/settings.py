@@ -49,6 +49,14 @@ _render_host = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if _render_host:
     ALLOWED_HOSTS.append(_render_host)
 
+# Vercel (serverless) — allow the deployment + project domains.
+ON_VERCEL = bool(os.getenv("VERCEL"))
+if ON_VERCEL:
+    ALLOWED_HOSTS.append(".vercel.app")
+    _vercel_url = os.getenv("VERCEL_URL")
+    if _vercel_url:
+        ALLOWED_HOSTS.append(_vercel_url)
+
 # Third-party API keys (read from env; never hardcode).
 GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY", "")
 
@@ -95,14 +103,19 @@ DATABASES = {
     }
 }
 
-# On-disk cache (keeps geocode/route results out of the process's RAM).
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": str(BASE_DIR / ".django_cache"),
-        "TIMEOUT": 60 * 60 * 24,
+# Cache: on Vercel the filesystem is read-only (except /tmp) and instances are
+# ephemeral, so use in-memory there; elsewhere use an on-disk cache to keep
+# geocode/route results out of the process's RAM.
+if ON_VERCEL:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION": str(BASE_DIR / ".django_cache"),
+            "TIMEOUT": 60 * 60 * 24,
+        }
     }
-}
 
 
 # Internationalization

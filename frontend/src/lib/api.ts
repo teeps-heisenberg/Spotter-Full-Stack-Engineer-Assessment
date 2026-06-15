@@ -1,9 +1,13 @@
 import type { TripFormValues, TripResponse } from '../types'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8001').replace(
-  /\/$/,
-  '',
-)
+// Resolution order:
+//  - VITE_API_BASE_URL if set (e.g. a Render URL, or a separate Vercel backend)
+//  - else in production: same-origin ('' → relative /api/..., for one-project Vercel)
+//  - else in dev: the local backend on :8001
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL
+const API_BASE = (
+  RAW_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8001')
+).replace(/\/$/, '')
 
 export class ApiError extends Error {
   field?: string
